@@ -951,3 +951,533 @@
   }
 
 })();
+/* ============================================================
+   ALPHA V9 — ROUTEUR CONVERSATIONNEL
+   Correction du raisonnement conversationnel V8
+
+   Objectifs :
+   - comprendre les formulations naturelles
+   - ne pas confondre une question avec un souvenir
+   - privilégier l'identité / l'état / les capacités
+   - conserver V8 pour la recherche et l'évolution
+   ============================================================ */
+
+(() => {
+  "use strict";
+
+  function normalizeV9(text) {
+    return String(text || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /* ----------------------------------------------------------
+     INTENTION : IDENTITÉ
+     ---------------------------------------------------------- */
+
+  function isIdentityV9(q) {
+
+    const t = normalizeV9(q);
+
+    return [
+      "qui es tu",
+      "qui est tu",
+      "tu es quoi",
+      "t es quoi",
+      "c est quoi ton nom",
+      "quel est ton nom",
+      "comment tu t appelles",
+      "tu t appelles comment",
+      "presente toi",
+      "parle moi de toi",
+      "qui es tu alpha",
+      "c est quoi alpha",
+      "alpha c est quoi",
+      "je veux savoir qui tu es",
+      "je veux savoir ce que tu es"
+    ].some(pattern => t === pattern || t.includes(pattern));
+  }
+
+  /* ----------------------------------------------------------
+     INTENTION : ÉTAT
+     ---------------------------------------------------------- */
+
+  function isStateV9(q) {
+
+    const t = normalizeV9(q);
+
+    return [
+      "comment vas tu",
+      "comment tu vas",
+      "quel est ton etat",
+      "ton etat actuel",
+      "ou en es tu",
+      "ou en es tu actuellement",
+      "sur quoi travailles tu",
+      "que fais tu actuellement",
+      "qu est ce que tu fais actuellement"
+    ].some(pattern => t === pattern || t.includes(pattern));
+  }
+
+  /* ----------------------------------------------------------
+     INTENTION : CAPACITÉS
+     ---------------------------------------------------------- */
+
+  function isCapabilitiesV9(q) {
+
+    const t = normalizeV9(q);
+
+    return [
+      "que sais tu faire",
+      "tu sais faire quoi",
+      "tu peux faire quoi",
+      "qu est ce que tu peux faire",
+      "quelles sont tes capacites",
+      "tes capacites",
+      "de quoi es tu capable",
+      "tu es capable de quoi"
+    ].some(pattern => t === pattern || t.includes(pattern));
+  }
+
+  /* ----------------------------------------------------------
+     INTENTION : LIMITES
+     ---------------------------------------------------------- */
+
+  function isLimitsV9(q) {
+
+    const t = normalizeV9(q);
+
+    return [
+      "quelles sont tes limites",
+      "tes limites",
+      "tu ne peux pas faire quoi",
+      "qu est ce que tu ne peux pas faire",
+      "qu est ce que tu ne sais pas faire",
+      "qu est ce que tu ignores"
+    ].some(pattern => t === pattern || t.includes(pattern));
+  }
+
+  /* ----------------------------------------------------------
+     IDENTITÉ
+     ---------------------------------------------------------- */
+
+  function identityResponse() {
+
+    const report =
+      window.ALPHA_V8 &&
+      typeof window.ALPHA_V8.selfReport === "function"
+        ? window.ALPHA_V8.selfReport()
+        : null;
+
+    if (!report) {
+
+      return [
+        "Je suis ALPHA.",
+        "",
+        "Je suis un programme JavaScript exécuté dans un navigateur.",
+        "",
+        "Mon architecture actuelle comprend une mémoire persistante,",
+        "un système de recherche, une auto-observation et un mécanisme",
+        "d'évolution de stratégies."
+      ].join("\n");
+    }
+
+    return [
+      "Je suis ALPHA.",
+      "",
+      "Je suis un programme JavaScript exécuté dans un navigateur.",
+      "",
+      "Mon moteur actuel est ALPHA V8.",
+      "",
+      "Je peux :",
+      "• observer mon état interne",
+      "• mémoriser des informations",
+      "• rechercher des informations externes",
+      "• comparer des stratégies",
+      "• tester certaines évolutions",
+      "• conserver des stratégies validées",
+      "",
+      `État mesuré :`,
+      `• ${report.actualState.cycles} cycle(s)`,
+      `• ${report.actualState.memories} souvenir(s)`,
+      `• ${report.actualState.searches} recherche(s)`,
+      `• ${report.evolutionHistory.length} évolution(s) enregistrée(s)`,
+      "",
+      "Je peux décrire mon fonctionnement à partir de ce que mon programme peut réellement observer.",
+      "",
+      "Cela ne constitue pas une preuve de conscience subjective."
+    ].join("\n");
+  }
+
+  /* ----------------------------------------------------------
+     ÉTAT
+     ---------------------------------------------------------- */
+
+  function stateResponse() {
+
+    if (
+      !window.ALPHA_V8 ||
+      typeof window.ALPHA_V8.selfReport !== "function"
+    ) {
+      return "Je ne peux pas encore mesurer précisément mon état interne.";
+    }
+
+    const r =
+      window.ALPHA_V8.selfReport();
+
+    return [
+      "Voici mon état actuellement mesuré :",
+      "",
+      `Version : ${r.version}`,
+      `Cycles : ${r.actualState.cycles}`,
+      `Souvenirs : ${r.actualState.memories}`,
+      `Recherches : ${r.actualState.searches}`,
+      `Évolutions enregistrées : ${r.evolutionHistory.length}`,
+      "",
+      "Mon fonctionnement suit actuellement cette logique :",
+      "",
+      "observer → analyser → rechercher si nécessaire → tester → conserver ou rejeter."
+    ].join("\n");
+  }
+
+  /* ----------------------------------------------------------
+     CAPACITÉS
+     ---------------------------------------------------------- */
+
+  function capabilitiesResponse() {
+
+    if (
+      !window.ALPHA_V8 ||
+      typeof window.ALPHA_V8.selfReport !== "function"
+    ) {
+      return "Je peux dialoguer, mémoriser et effectuer certaines recherches.";
+    }
+
+    const r =
+      window.ALPHA_V8.selfReport();
+
+    return [
+      "J'ai vérifié mes capacités observables.",
+      "",
+      "Je peux :",
+      ...r.actualCapabilities.map(
+        capability => `• ${capability}`
+      ),
+      "",
+      `Mesures actuelles : ${r.actualState.cycles} cycle(s), ${r.actualState.memories} souvenir(s), ${r.actualState.searches} recherche(s).`,
+      "",
+      "Je distingue ces capacités réelles de celles que je pourrais seulement proposer comme évolution future."
+    ].join("\n");
+  }
+
+  /* ----------------------------------------------------------
+     LIMITES
+     ---------------------------------------------------------- */
+
+  function limitsResponse() {
+
+    if (
+      !window.ALPHA_V8 ||
+      typeof window.ALPHA_V8.selfReport !== "function"
+    ) {
+      return "Je ne peux pas encore déterminer toutes mes limites.";
+    }
+
+    const r =
+      window.ALPHA_V8.selfReport();
+
+    return [
+      "Après auto-observation, voici mes principales limites :",
+      "",
+      ...r.importantLimitations.map(
+        limitation => `• ${limitation}`
+      ),
+      "",
+      "Je ne dois pas prétendre avoir réalisé une modification ou une capacité qui n'est pas réellement présente dans mon programme."
+    ].join("\n");
+  }
+
+  /* ----------------------------------------------------------
+     CONVERSATION
+     ---------------------------------------------------------- */
+
+  function saveConversation(question, response) {
+
+    try {
+
+      if (
+        typeof S !== "undefined" &&
+        Array.isArray(S.conversation)
+      ) {
+
+        S.conversation.push(
+          {
+            role: "human",
+            text: question,
+            at: new Date().toISOString()
+          },
+          {
+            role: "alpha",
+            text: response,
+            at: new Date().toISOString()
+          }
+        );
+
+        S.conversation =
+          S.conversation.slice(-100);
+
+        if (typeof save === "function") {
+          save();
+        }
+
+        if (typeof render === "function") {
+          render();
+        }
+      }
+
+    } catch (error) {
+
+      console.warn(
+        "[ALPHA V9] Sauvegarde conversation impossible",
+        error
+      );
+
+    }
+  }
+
+  /* ----------------------------------------------------------
+     NOUVELLE FONCTION PRINCIPALE
+     ---------------------------------------------------------- */
+
+  async function answerV9(question) {
+
+    const q =
+      String(question || "").trim();
+
+    if (!q) return;
+
+    if (typeof setStatus === "function") {
+      setStatus("● ANALYSE V9");
+    }
+
+    let response;
+
+    /* PRIORITÉ 1 : IDENTITÉ */
+
+    if (isIdentityV9(q)) {
+
+      response =
+        identityResponse();
+
+    }
+
+    /* PRIORITÉ 2 : ÉTAT */
+
+    else if (isStateV9(q)) {
+
+      response =
+        stateResponse();
+
+    }
+
+    /* PRIORITÉ 3 : CAPACITÉS */
+
+    else if (isCapabilitiesV9(q)) {
+
+      response =
+        capabilitiesResponse();
+
+    }
+
+    /* PRIORITÉ 4 : LIMITES */
+
+    else if (isLimitsV9(q)) {
+
+      response =
+        limitsResponse();
+
+    }
+
+    /* --------------------------------------------------------
+       QUESTION NORMALE
+       V8 RESTE UTILISÉ
+       -------------------------------------------------------- */
+
+    else {
+
+      try {
+
+        if (
+          window.ALPHA_V8 &&
+          typeof window.ALPHA_V8.processQuestion === "function"
+        ) {
+
+          const result =
+            await window.ALPHA_V8.processQuestion(q);
+
+          if (
+            result.research &&
+            result.research.length
+          ) {
+
+            response = [
+              "J'ai analysé la question.",
+              "",
+              "J'ai choisi d'effectuer une recherche externe.",
+              "",
+              ...result.research
+                .slice(0, 3)
+                .map(r =>
+                  `• ${r.title}\n` +
+                  `${String(
+                    r.extract ||
+                    r.text ||
+                    ""
+                  ).slice(0, 1500)}\n` +
+                  `Source : ${
+                    r.url ||
+                    "source externe"
+                  }`
+                )
+            ].join("\n\n");
+
+          }
+
+          else {
+
+            response = [
+              "J'ai analysé ta question.",
+              "",
+              "Je n'ai pas trouvé suffisamment d'informations fiables dans ma mémoire.",
+              "",
+              "Je peux effectuer une recherche externe si nécessaire."
+            ].join("\n");
+
+          }
+
+        }
+
+        else {
+
+          response =
+            "Mon moteur V8 n'est pas accessible actuellement.";
+
+        }
+
+      } catch (error) {
+
+        console.error(
+          "[ALPHA V9]",
+          error
+        );
+
+        response =
+          "Une erreur est survenue pendant mon analyse.";
+      }
+    }
+
+    saveConversation(
+      q,
+      response
+    );
+
+    if (typeof setStatus === "function") {
+      setStatus("● EN LIGNE");
+    }
+  }
+
+  /* ----------------------------------------------------------
+     REMPLACEMENT DU BOUTON
+     ---------------------------------------------------------- */
+
+  function installV9() {
+
+    const button =
+      document.getElementById("send");
+
+    const input =
+      document.getElementById("question");
+
+    if (!button || !input) {
+
+      setTimeout(
+        installV9,
+        300
+      );
+
+      return;
+    }
+
+    /* clone = suppression de TOUS les anciens listeners */
+
+    const newButton =
+      button.cloneNode(true);
+
+    button.replaceWith(
+      newButton
+    );
+
+    const newInput =
+      input.cloneNode(true);
+
+    input.replaceWith(
+      newInput
+    );
+
+    newButton.addEventListener(
+      "click",
+      () => {
+
+        answerV9(
+          newInput.value
+        );
+
+        newInput.value = "";
+      }
+    );
+
+    newInput.addEventListener(
+      "keydown",
+      event => {
+
+        if (
+          event.key === "Enter" &&
+          !event.shiftKey
+        ) {
+
+          event.preventDefault();
+
+          answerV9(
+            newInput.value
+          );
+
+          newInput.value = "";
+        }
+      }
+    );
+
+    console.log(
+      "[ALPHA V9] Routage conversationnel actif."
+    );
+  }
+
+  if (
+    document.readyState === "loading"
+  ) {
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      installV9
+    );
+
+  } else {
+
+    installV9();
+
+  }
+
+})();
