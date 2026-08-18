@@ -627,3 +627,327 @@
   }
 
 })();
+/* ============================================================
+   ALPHA V9 — HOTFIX COMMUNICATION
+   Répare le bouton ÉCHANGER
+   Supprime le panneau diagnostic
+   ============================================================ */
+
+(() => {
+  "use strict";
+
+  function bootV9() {
+
+    const V8 = window.ALPHA_V8;
+
+    const oldSend =
+      document.getElementById("send");
+
+    const oldQuestion =
+      document.getElementById("question");
+
+    if (!V8 || !oldSend || !oldQuestion) {
+      console.warn(
+        "[ALPHA V9] Interface introuvable."
+      );
+      return;
+    }
+
+    /* --------------------------------------------------------
+       SUPPRESSION DU PANNEAU
+       -------------------------------------------------------- */
+
+    const panel =
+      document.getElementById("alpha-v8-panel");
+
+    if (panel) {
+      panel.remove();
+    }
+
+    /* Supprime l'ancien petit bouton V8 */
+    const oldDiagnostic =
+      document.getElementById("alpha-v8-button");
+
+    if (oldDiagnostic) {
+      oldDiagnostic.remove();
+    }
+
+    /* --------------------------------------------------------
+       NOUVEAUX ÉLÉMENTS
+       -------------------------------------------------------- */
+
+    const send =
+      oldSend.cloneNode(true);
+
+    oldSend.replaceWith(send);
+
+    const question =
+      oldQuestion.cloneNode(true);
+
+    oldQuestion.replaceWith(question);
+
+    /* --------------------------------------------------------
+       FONCTION DE COMMUNICATION
+       -------------------------------------------------------- */
+
+    async function askAlpha() {
+
+      const q =
+        String(question.value || "").trim();
+
+      if (!q) return;
+
+      question.value = "";
+
+      setStatus("● ANALYSE V8");
+
+      try {
+
+        const result =
+          await V8.processQuestion(q);
+
+        let response = "";
+
+        /* Recherche externe */
+
+        if (
+          result.research &&
+          result.research.length
+        ) {
+
+          response = [
+            "J'ai analysé ta question et déterminé qu'une recherche externe était nécessaire.",
+            "",
+            ...result.research
+              .slice(0, 3)
+              .map(r =>
+                `• ${r.title}\n` +
+                `${String(
+                  r.extract ||
+                  r.text ||
+                  ""
+                ).slice(0, 1400)}\n` +
+                `Source : ${
+                  r.url ||
+                  "source externe"
+                }`
+              )
+          ].join("\n\n");
+
+        }
+
+        /* Mémoire */
+
+        else if (
+          result.route &&
+          result.route.memoryResults &&
+          result.route.memoryResults.length
+        ) {
+
+          response = [
+            "J'ai analysé la question avant d'utiliser ma mémoire.",
+            "",
+            ...result.route.memoryResults
+              .slice(0, 3)
+              .map(r =>
+                `• ${
+                  r.memory?.text ||
+                  r.text ||
+                  "information mémorisée"
+                }`
+              )
+          ].join("\n\n");
+
+        }
+
+        /* Pas de résultat */
+
+        else {
+
+          response = [
+            "J'ai analysé ta question.",
+            "",
+            "Je ne dispose pas encore de suffisamment d'informations fiables pour produire une réponse correcte.",
+            "",
+            "Je peux poursuivre par une recherche si tu me demandes de chercher."
+          ].join("\n");
+
+        }
+
+        /* ----------------------------------------------------
+           ENREGISTREMENT DE LA CONVERSATION
+           ---------------------------------------------------- */
+
+        if (
+          typeof S !== "undefined" &&
+          Array.isArray(S.conversation)
+        ) {
+
+          S.conversation.push(
+            {
+              role: "human",
+              text: q,
+              at: new Date().toISOString()
+            },
+            {
+              role: "alpha",
+              text: response,
+              at: new Date().toISOString()
+            }
+          );
+
+          S.conversation =
+            S.conversation.slice(-100);
+
+          if (
+            typeof save === "function"
+          ) {
+            save();
+          }
+        }
+
+        /* ----------------------------------------------------
+           AFFICHAGE
+           ---------------------------------------------------- */
+
+        if (
+          typeof render === "function"
+        ) {
+          render();
+        }
+
+        setStatus("● EN LIGNE");
+
+      } catch (error) {
+
+        console.error(
+          "[ALPHA V9] Erreur :",
+          error
+        );
+
+        setStatus(
+          "● ERREUR — RÉESSAYE"
+        );
+      }
+    }
+
+    /* --------------------------------------------------------
+       BOUTON ÉCHANGER
+       -------------------------------------------------------- */
+
+    send.addEventListener(
+      "click",
+      askAlpha
+    );
+
+    /* --------------------------------------------------------
+       TOUCHE ENTRÉE
+       -------------------------------------------------------- */
+
+    question.addEventListener(
+      "keydown",
+      event => {
+
+        if (
+          event.key === "Enter" &&
+          !event.shiftKey
+        ) {
+
+          event.preventDefault();
+
+          askAlpha();
+        }
+
+      }
+    );
+
+    /* --------------------------------------------------------
+       PETIT BOUTON DIAGNOSTIC
+       -------------------------------------------------------- */
+
+    const diagnostic =
+      document.createElement("button");
+
+    diagnostic.id =
+      "alpha-v9-diagnostic";
+
+    diagnostic.type =
+      "button";
+
+    diagnostic.textContent =
+      "V8";
+
+    diagnostic.title =
+      "État interne d'Alpha";
+
+    diagnostic.style.cssText = `
+      position:fixed;
+      right:12px;
+      bottom:12px;
+      z-index:9999;
+
+      width:42px;
+      height:34px;
+
+      border:1px solid #444;
+      border-radius:10px;
+
+      background:#111;
+      color:#fff;
+
+      font:700 11px Arial,sans-serif;
+
+      opacity:.45;
+    `;
+
+    diagnostic.addEventListener(
+      "click",
+      () => {
+
+        const report =
+          V8.selfReport();
+
+        alert(
+          "ALPHA V8\n\n" +
+
+          "Cycles : " +
+          report.actualState.cycles +
+
+          "\nSouvenirs : " +
+          report.actualState.memories +
+
+          "\nRecherches : " +
+          report.actualState.searches +
+
+          "\nÉvolutions : " +
+          report.evolutionHistory.length
+        );
+      }
+    );
+
+    document.body.appendChild(
+      diagnostic
+    );
+
+    console.log(
+      "[ALPHA V9] Communication réparée."
+    );
+  }
+
+  if (
+    document.readyState ===
+    "loading"
+  ) {
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      bootV9
+    );
+
+  } else {
+
+    bootV9();
+
+  }
+
+})();
