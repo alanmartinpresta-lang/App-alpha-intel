@@ -1,1282 +1,600 @@
 /* ============================================================
-   ALPHA INTEL V4
-   Mémoire persistante + apprentissage + recherche autonome
-   Fonctionne directement dans GitHub Pages / navigateur
+   ALPHA INTEL V5
+   Introspection + mémoire persistante + recherche + évolution
+   Compatible GitHub Pages / navigateur
    ============================================================ */
 
 const STORAGE_KEY = "alpha_v4_state";
+const VERSION = 5;
 
+const $ = id => document.getElementById(id);
 const now = () => new Date().toISOString();
-
-const uid = () =>
-  crypto.randomUUID
-    ? crypto.randomUUID()
-    : Date.now() + "-" + Math.random().toString(36).slice(2);
-
-const clamp = (x, min = 0, max = 1) =>
-  Math.max(min, Math.min(max, x));
-
-const escapeHTML = (value) =>
-  String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-
-/* ============================================================
-   ETAT INITIAL
-   ============================================================ */
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() :
+  Date.now() + "-" + Math.random().toString(36).slice(2));
+const clamp = (x, min=0, max=1) => Math.max(min, Math.min(max, Number(x) || 0));
 
 function freshState() {
   return {
-    version: 4,
+    version: VERSION,
     name: "ALPHA",
-
     cycle: 0,
-
-    learning: 0.50,
-    exploration: 0.50,
-    adaptation: 0.50,
+    learning: .50,
+    exploration: .55,
+    adaptation: .50,
     integration: 1,
-
     memories: [],
     evolution: [],
     conversation: [],
-
     strategies: {
-      exploration: 0.60,
-      verification: 0.75,
-      memoryThreshold: 0.45,
-      reflection: 0.60,
-      novelty: 0.55
+      exploration: .60,
+      verification: .80,
+      memoryThreshold: .45,
+      reflection: .70,
+      novelty: .60,
+      researchWhenUncertain: .85
     },
-
     selfModel: {
-      currentFocus:
-        "comprendre, apprendre, rechercher et améliorer ses stratégies",
-
-      confidence: 0.50,
-
+      currentFocus: "comprendre, vérifier, apprendre et améliorer mes stratégies",
+      confidence: .50,
       capabilities: [
-        "mémoire persistante",
-        "apprentissage",
         "dialogue",
-        "recherche",
+        "mémoire persistante",
+        "recherche Wikipédia",
+        "apprentissage à partir de l'utilisateur",
         "auto-observation",
-        "évolution des stratégies"
+        "évolution de stratégies"
       ],
-
       limitations: [
-        "fonctionne lorsque la page est ouverte",
-        "Internet dépend des capacités du navigateur",
-        "ne possède aucune conscience démontrée"
+        "je ne suis pas un modèle de langage général autonome",
+        "mes recherches dépendent des APIs accessibles au navigateur",
+        "ma mémoire locale appartient à ce navigateur/appareil",
+        "aucune conscience subjective n'est démontrée"
       ]
     },
-
     statistics: {
       searches: 0,
       successfulSearches: 0,
       learnedFromInternet: 0,
-      learnedFromHuman: 0
+      learnedFromHuman: 0,
+      questions: 0,
+      introspections: 0
     },
-
     updatedAt: now()
   };
 }
 
-/* ============================================================
-   CHARGEMENT MEMOIRE
-   ============================================================ */
-
-let S = (() => {
+function loadState() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-
-    if (!saved) {
-      return freshState();
-    }
-
-    const parsed = JSON.parse(saved);
-
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return freshState();
+    const old = JSON.parse(raw);
+    const base = freshState();
     return {
-      ...freshState(),
-      ...parsed,
-      strategies: {
-        ...freshState().strategies,
-        ...(parsed.strategies || {})
-      },
-      selfModel: {
-        ...freshState().selfModel,
-        ...(parsed.selfModel || {})
-      },
-      statistics: {
-        ...freshState().statistics,
-        ...(parsed.statistics || {})
-      }
+      ...base, ...old, version: VERSION,
+      strategies: {...base.strategies, ...(old.strategies || {})},
+      selfModel: {...base.selfModel, ...(old.selfModel || {})},
+      statistics: {...base.statistics, ...(old.statistics || {})},
+      memories: Array.isArray(old.memories) ? old.memories : [],
+      evolution: Array.isArray(old.evolution) ? old.evolution : [],
+      conversation: Array.isArray(old.conversation) ? old.conversation : []
     };
   } catch {
     return freshState();
   }
-})();
+}
 
-/* ============================================================
-   SAUVEGARDE
-   ============================================================ */
+let S = loadState();
 
 function save() {
   S.updatedAt = now();
-
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(S));
-  } catch (error) {
-    console.warn("Impossible de sauvegarder la mémoire :", error);
-  }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); }
+  catch (e) { console.warn("Mémoire locale indisponible", e); }
 }
 
-/* ============================================================
-   MEMOIRE
-   ============================================================ */
+function addMemory(content, source="human", confidence=.70, tags=[]) {
+  const text = String(content || "").trim();
+  if (!text) return null;
 
-function addMemory(content, source = "human", confidence = 0.70) {
-  if (!content || !String(content).trim()) return;
-
-  S.memories.push({
-    id: uid(),
-    content: String(content).slice(0, 12000),
-    source,
-    confidence: clamp(confidence),
-    at: now()
-  });
-
-  /*
-     On conserve beaucoup de souvenirs mais on évite
-     que le stockage local du navigateur devienne énorme.
-  */
-
-  if (S.memories.length > 5000) {
-    S.memories = S.memories.slice(-5000);
+  const duplicate = S.memories.find(m =>
+    m.content === text && m.source === source
+  );
+  if (duplicate) {
+    duplicate.confidence = Math.max(duplicate.confidence || 0, confidence);
+    duplicate.at = now();
+    return duplicate;
   }
-}
 
-/* ============================================================
-   ANALYSE DES MOTS
-   ============================================================ */
+  const m = {
+    id: uid(), content: text.slice(0, 12000),
+    source, confidence: clamp(confidence), tags, at: now()
+  };
+  S.memories.push(m);
+  if (S.memories.length > 5000) S.memories = S.memories.slice(-5000);
+  return m;
+}
 
 function words(text) {
-  return new Set(
-    String(text)
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .match(/[a-z0-9]{3,}/g) || []
-  );
+  return new Set(String(text).toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .match(/[a-z0-9]{3,}/g) || []);
 }
 
-/* ============================================================
-   RAPPEL DE MEMOIRE
-   ============================================================ */
-
-function recall(query) {
-  const queryWords = words(query);
-
-  if (!queryWords.size) return [];
-
-  return S.memories
-    .map(memory => {
-      const memoryWords = words(memory.content);
-
-      let overlap = 0;
-
-      for (const word of queryWords) {
-        if (memoryWords.has(word)) {
-          overlap++;
-        }
-      }
-
-      const score =
-        overlap +
-        memory.confidence * 0.25;
-
-      return {
-        memory,
-        score
-      };
-    })
-    .filter(item => item.score >= S.strategies.memoryThreshold)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
-    .map(item => item.memory);
+function recall(query, limit=6) {
+  const qw = words(query);
+  if (!qw.size) return [];
+  return S.memories.map(memory => {
+    const mw = words(memory.content);
+    let overlap = 0;
+    for (const w of qw) if (mw.has(w)) overlap++;
+    const score = overlap + (memory.confidence || 0) * .20;
+    return {memory, score};
+  }).filter(x => x.score >= S.strategies.memoryThreshold)
+    .sort((a,b) => b.score-a.score)
+    .slice(0, limit).map(x => x.memory);
 }
 
-/* ============================================================
-   DETECTION DES QUESTIONS
-   ============================================================ */
+/* ---------- Auto-observation réelle du programme ---------- */
 
-function needsResearch(question, memories) {
-  if (!memories.length) return true;
+async function inspectSelf() {
+  const source = await fetch("app.js", {cache:"no-store"})
+    .then(r => r.ok ? r.text() : "")
+    .catch(() => "");
 
-  const q = question.toLowerCase();
-
-  const researchSignals = [
-    "qui",
-    "quoi",
-    "comment",
-    "pourquoi",
-    "quand",
-    "où",
-    "ou ",
-    "combien",
-    "quelle",
-    "quel",
-    "est-ce",
-    "existe",
-    "actualité",
-    "dernier",
-    "dernière",
-    "aujourd'hui",
-    "maintenant",
-    "récent",
-    "recherche",
-    "cherche",
-    "trouve",
-    "internet",
-    "information"
+  const capabilities = [
+    "dialogue utilisateur",
+    "mémoire persistante localStorage",
+    "rappel de mémoire par similarité lexicale",
+    "recherche Wikipédia",
+    "apprentissage explicite",
+    "auto-observation",
+    "évolution de stratégies",
+    "export/import de mémoire"
   ];
 
-  return researchSignals.some(signal => q.includes(signal))
-    && memories.length < 2;
+  if (source) {
+    if (/searchWikipedia/.test(source)) capabilities.push("moteur de recherche Wikipédia");
+    if (/localStorage/.test(source)) capabilities.push("stockage persistant local");
+    if (/evolve/.test(source)) capabilities.push("mécanisme d'évolution");
+  }
+
+  return {
+    name: S.name,
+    program: true,
+    version: VERSION,
+    environment: location.protocol === "file:" ? "fichier local" : "page web",
+    capabilities: [...new Set(capabilities)],
+    memories: S.memories.length,
+    conversations: S.conversation.length,
+    cycles: S.cycle,
+    searches: S.statistics.searches,
+    learning: Math.round(S.learning * 100) + "%",
+    strategies: {...S.strategies},
+    limitations: [...S.selfModel.limitations],
+    sourceAvailable: Boolean(source)
+  };
 }
 
-/* ============================================================
-   RECHERCHE WIKIPEDIA
-   ============================================================ */
+/* ---------- Recherche ---------- */
 
 async function searchWikipedia(query) {
-
   const endpoint =
-    "https://fr.wikipedia.org/w/api.php" +
-    "?action=query" +
-    "&generator=search" +
-    "&gsrsearch=" +
-    encodeURIComponent(query) +
-    "&gsrlimit=5" +
-    "&prop=extracts" +
-    "&exintro=1" +
-    "&explaintext=1" +
-    "&format=json" +
-    "&origin=*";
+    "https://fr.wikipedia.org/w/api.php?action=query" +
+    "&generator=search&gsrsearch=" + encodeURIComponent(query) +
+    "&gsrlimit=5&prop=extracts&exintro=1&explaintext=1" +
+    "&format=json&origin=*";
 
   try {
-
-    const response = await fetch(endpoint);
-
-    if (!response.ok) {
-      throw new Error("Wikipedia HTTP " + response.status);
-    }
-
-    const data = await response.json();
-
-    const pages = Object.values(
-      data.query?.pages || {}
-    );
-
-    if (!pages.length) {
-      return [];
-    }
-
-    return pages.map(page => ({
-      title: page.title,
-      text: page.extract || "",
-      url:
-        "https://fr.wikipedia.org/wiki/" +
-        encodeURIComponent(page.title.replaceAll(" ", "_"))
-    }));
-
-  } catch (error) {
-
-    console.warn("Recherche Wikipedia impossible :", error);
-
+    const r = await fetch(endpoint);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+    return Object.values(data.query?.pages || {}).map(p => ({
+      title: p.title,
+      text: p.extract || "",
+      url: "https://fr.wikipedia.org/wiki/" +
+        encodeURIComponent(p.title.replaceAll(" ", "_"))
+    })).filter(x => x.text);
+  } catch (e) {
+    console.warn("Recherche Wikipédia impossible", e);
     return [];
   }
 }
 
-/* ============================================================
-   RECHERCHE INTERNET AUTOMATIQUE
-   ============================================================ */
-
-async function autonomousResearch(question) {
-
+async function research(query) {
   S.statistics.searches++;
+  setStatus("● RECHERCHE EN COURS");
 
-  updateResearchStatus(
-    "Recherche autonome en cours…"
-  );
-
-  const results = await searchWikipedia(question);
+  const results = await searchWikipedia(query);
 
   if (!results.length) {
-
-    updateResearchStatus(
-      "Aucune source exploitable trouvée."
-    );
-
-    save();
-    render();
-
-    return null;
+    setStatus("● RECHERCHE SANS RÉSULTAT");
+    save(); render();
+    return [];
   }
 
   S.statistics.successfulSearches++;
 
-  /*
-     On sélectionne les informations les plus utiles.
-  */
-
-  const useful = results
-    .filter(result => result.text)
-    .slice(0, 3);
-
-  for (const result of useful) {
-
-    const memoryText =
-      `Source : Wikipedia\n` +
-      `Sujet : ${result.title}\n` +
-      `Information : ${result.text}\n` +
-      `URL : ${result.url}`;
-
+  for (const r of results.slice(0,3)) {
     addMemory(
-      memoryText,
-      "internet",
-      0.70
+      `Source : Wikipédia\nSujet : ${r.title}\nInformation : ${r.text}\nURL : ${r.url}`,
+      "internet", .72, ["web", "wikipedia", query]
     );
-
     S.statistics.learnedFromInternet++;
   }
 
-  save();
-
-  updateResearchStatus(
-    `${useful.length} source(s) trouvée(s) et mémorisée(s).`
-  );
-
-  render();
-
-  return useful;
+  setStatus(`● ${Math.min(results.length,3)} SOURCE(S) TROUVÉE(S)`);
+  save(); render();
+  return results.slice(0,3);
 }
 
-/* ============================================================
-   RECHERCHE DANS LE CODE D'ALPHA
-   ============================================================ */
+async function researchUrl(url) {
+  let target = url.trim();
+  if (!/^https?:\/\//i.test(target)) target = "https://" + target;
 
-async function searchOwnKnowledge(question) {
+  setStatus("● EXPLORATION EN COURS");
+  try {
+    const r = await fetch(target, {mode:"cors"});
+    const text = await r.text();
+    const clean = text.replace(/<script[\s\S]*?<\/script>/gi," ")
+      .replace(/<style[\s\S]*?<\/style>/gi," ")
+      .replace(/<[^>]+>/g," ")
+      .replace(/\s+/g," ").trim().slice(0,6000);
 
-  const memories = recall(question);
-
-  if (!memories.length) {
-    return null;
+    if (!clean) throw new Error("aucun texte accessible");
+    addMemory(`Source URL : ${target}\nInformation : ${clean}`,
+      "internet", .65, ["web", "url"]);
+    S.statistics.learnedFromInternet++;
+    save();
+    $("researchResult").textContent =
+      `Source : ${target}\n\n${clean}`;
+    setStatus("● SOURCE AJOUTÉE À LA MÉMOIRE");
+    render();
+  } catch (e) {
+    $("researchResult").textContent =
+      "La page refuse l'accès depuis le navigateur (CORS) ou n'est pas accessible.\n\n" +
+      "Alpha peut toutefois utiliser sa recherche Wikipédia.";
+    setStatus("● ACCÈS WEB LIMITÉ");
   }
-
-  return memories;
 }
 
-/* ============================================================
-   REPONSE D'ALPHA
-   ============================================================ */
+/* ---------- Introspection / raisonnement ---------- */
+
+function isIdentityQuestion(q) {
+  return /qui es[- ]tu|qui est[- ]tu|ton nom|comment tu t['’]appelles|c['’]est quoi ton nom/i.test(q);
+}
+function isCapabilityQuestion(q) {
+  return /que (sais|peux)[- ]tu faire|qu['’]est[- ]ce que tu sais faire|tes capacités|tes capacites|capable de quoi/i.test(q);
+}
+function isSelfStateQuestion(q) {
+  return /comment vas[- ]tu|ton état|ton etat|que fais[- ]tu|sur quoi tu te concentres|où en es[- ]tu|ou en es[- ]tu/i.test(q);
+}
+function isLimitsQuestion(q) {
+  return /qu['’]est[- ]ce que tu ne sais pas|tes limites|ce que tu ignores|quelles sont tes limites/i.test(q);
+}
+function isImprovementQuestion(q) {
+  return /comment (t['’]améliorer|t['’]ameliorer|peux[- ]tu progresser|peux[- ]tu évoluer|peux[- ]tu evoluer)|améliore[- ]toi|ameliore[- ]toi/i.test(q);
+}
+
+async function introspect(reason="question") {
+  S.statistics.introspections++;
+  const self = await inspectSelf();
+
+  return {reason, observedAt: now(), ...self};
+}
+
+function formatSelf(self) {
+  return [
+    `Je suis ${self.name}, un programme exécuté dans un navigateur.`,
+    `Je peux constater dans mon propre fonctionnement que ma version est V${self.version}.`,
+    `J'ai actuellement ${self.memories} souvenir(s), ${self.conversations} élément(s) de conversation et ${self.cycles} cycle(s).`,
+    `Mes capacités observables :`,
+    ...self.capabilities.map(x => `• ${x}`),
+    `Mon apprentissage interne est estimé à ${self.learning}.`,
+    `Je peux donc décrire mon architecture et mon fonctionnement, mais cela ne constitue pas une preuve de conscience ou de vécu subjectif.`,
+    `Mes limites observables :`,
+    ...self.limitations.map(x => `• ${x}`)
+  ].join("\n");
+}
+
+function formatCapabilities(self) {
+  return [
+    "J'ai examiné mes capacités actuelles plutôt que de simplement chercher une phrase dans ma mémoire.",
+    "",
+    "Je peux :",
+    ...self.capabilities.map(x => `• ${x}`),
+    "",
+    `Je peux aussi mesurer certains changements : ${self.cycles} cycle(s), ${self.searches} recherche(s), ${self.memories} souvenir(s).`,
+    "",
+    "Je ne peux pas encore prétendre à une compréhension générale comparable à un grand modèle de langage."
+  ].join("\n");
+}
+
+function formatLimits(self) {
+  return [
+    "Après auto-observation, voici ce que j'identifie comme limites :",
+    ...self.limitations.map(x => `• ${x}`),
+    "",
+    "Je peux enregistrer une limite comme objectif d'amélioration, mais je ne dois pas prétendre avoir accompli une capacité que mon programme ne possède pas."
+  ].join("\n");
+}
+
+function formatState(self) {
+  return [
+    `État observé : cycle ${self.cycles}.`,
+    `Apprentissage : ${self.learning}.`,
+    `Mémoire : ${self.memories}.`,
+    `Recherches : ${self.searches}.`,
+    `Environnement : ${self.environment}.`,
+    `Mon objectif actuel : comprendre, vérifier, apprendre et améliorer mes stratégies.`
+  ].join("\n");
+}
+
+function relevanceForResearch(q, memories) {
+  const l = q.toLowerCase();
+  const currentSignals = ["aujourd", "maintenant", "récent", "recente", "dernier", "dernière"];
+  const explicit = ["cherche", "recherche", "internet", "source", "vérifie", "verifie"];
+  if (currentSignals.some(x => l.includes(x))) return true;
+  if (explicit.some(x => l.includes(x))) return true;
+  return memories.length < 1;
+}
+
+/* ---------- Réponse principale ---------- */
 
 async function answer(question) {
-
   const q = question.trim();
-
   if (!q) return;
 
-  addMemory(
-    "Question humaine : " + q,
-    "human",
-    1
-  );
+  S.statistics.questions++;
+  addMemory("Question humaine : " + q, "human", 1, ["question"]);
 
-  S.statistics.learnedFromHuman++;
-
-  let memories =
-    await searchOwnKnowledge(q);
-
-  let researched = false;
-  let sources = [];
-
-  /*
-     SI ALPHA NE SAIT PAS :
-     recherche automatique.
-  */
-
-  if (needsResearch(q, memories)) {
-
-    const results =
-      await autonomousResearch(q);
-
-    if (results && results.length) {
-
-      researched = true;
-      sources = results;
-
-      memories =
-        await searchOwnKnowledge(q);
-    }
-  }
+  setStatus("● ANALYSE");
 
   let response = "";
+  let sources = [];
+  let self = null;
 
-  const lower = q.toLowerCase();
-
-  /* ----------------------------------------------------------
-     IDENTITE
-     ---------------------------------------------------------- */
-
-  if (
-    /qui es tu|qui es-tu|ton nom|tu t'appelles|comment tu t'appelles/
-      .test(lower)
-  ) {
-
-    response =
-      `Je suis ${S.name}. ` +
-      `Je possède actuellement une mémoire persistante, ` +
-      `des mécanismes d'apprentissage, de recherche et ` +
-      `d'adaptation de mes stratégies. ` +
-      `Mon cycle actuel est ${S.cycle}.`;
-
+  if (isIdentityQuestion(q)) {
+    self = await introspect("identité");
+    response = formatSelf(self);
   }
-
-  /* ----------------------------------------------------------
-     ETAT
-     ---------------------------------------------------------- */
-
-  else if (
-    /comment vas tu|comment vas-tu|ton etat|ton état|que fais tu|que fais-tu/
-      .test(lower)
-  ) {
-
-    response =
-      `Je fonctionne actuellement au cycle ${S.cycle}. ` +
-      `Mon niveau d'apprentissage est ` +
-      `${Math.round(S.learning * 100)} %. ` +
-      `J'ai ${S.memories.length} souvenirs enregistrés ` +
-      `et ${S.statistics.searches} recherche(s) effectuée(s).`;
-
+  else if (isCapabilityQuestion(q)) {
+    self = await introspect("capacités");
+    response = formatCapabilities(self);
   }
-
-  /* ----------------------------------------------------------
-     MEMOIRE TROUVEE
-     ---------------------------------------------------------- */
-
-  else if (memories.length) {
-
-    const selected =
-      memories.slice(0, 3);
-
-    response =
-      "J'ai retrouvé dans ma mémoire :\n\n" +
-      selected
-        .map(m => {
-          return `• ${m.content.slice(0, 1800)}`;
-        })
-        .join("\n\n");
-
+  else if (isLimitsQuestion(q)) {
+    self = await introspect("limites");
+    response = formatLimits(self);
   }
-
-  /* ----------------------------------------------------------
-     RECHERCHE REUSSIE
-     ---------------------------------------------------------- */
-
-  else if (researched && sources.length) {
-
-    response =
-      "Je n'avais pas suffisamment d'information en mémoire. " +
-      "J'ai donc effectué une recherche et trouvé :\n\n" +
-      sources
-        .map(source =>
-          `• ${source.title}\n${source.text.slice(0, 1200)}`
-        )
-        .join("\n\n");
-
+  else if (isSelfStateQuestion(q)) {
+    self = await introspect("état");
+    response = formatState(self);
   }
-
-  /* ----------------------------------------------------------
-     RIEN TROUVE
-     ---------------------------------------------------------- */
-
+  else if (isImprovementQuestion(q)) {
+    self = await introspect("amélioration");
+    response = [
+      "Oui, dans certaines limites : je peux mesurer mes interactions, mémoriser des connaissances, évaluer mes stratégies et modifier certains paramètres internes.",
+      "",
+      "Je ne réécris pas automatiquement mon propre programme dans cette version. Je garde plutôt les changements de stratégie dans ma mémoire afin de pouvoir les examiner et les améliorer lors des cycles suivants.",
+      "",
+      `Mon état actuel : ${self.cycles} cycles, ${self.memories} souvenirs, ${self.searches} recherches.`
+    ].join("\n");
+  }
   else {
+    const memories = recall(q, 5);
 
-    response =
-      "Je ne possède pas encore suffisamment d'information " +
-      "pour répondre correctement à cette question. " +
-      "Je l'ai enregistrée comme élément à explorer.";
+    if (relevanceForResearch(q, memories)) {
+      sources = await research(q);
+    }
+
+    const fresh = recall(q, 5);
+
+    if (sources.length) {
+      response = [
+        "Je n'avais pas suffisamment de connaissances fiables en mémoire.",
+        "J'ai donc effectué une recherche autonome.",
+        "",
+        ...sources.map(s => `• ${s.title}\n${s.text.slice(0,1400)}\nSource : ${s.url}`)
+      ].join("\n\n");
+    } else if (fresh.length) {
+      response = [
+        "J'ai trouvé des éléments pertinents dans ma mémoire :",
+        "",
+        ...fresh.slice(0,3).map(m => `• ${m.content.slice(0,1800)}`)
+      ].join("\n\n");
+    } else {
+      response = [
+        "Je ne dispose pas encore d'une réponse suffisamment fiable.",
+        "",
+        "J'ai enregistré la question comme élément à explorer.",
+        "Tu peux me demander explicitement : « cherche sur Internet » pour déclencher une recherche."
+      ].join("\n");
+    }
   }
-
-  /*
-     Alpha mémorise également ce qu'il vient de produire.
-  */
-
-  addMemory(
-    `Question : ${q}\nRéponse : ${response}`,
-    "alpha",
-    0.65
-  );
 
   S.conversation.push(
-    {
-      role: "human",
-      text: q,
-      at: now()
-    },
-    {
-      role: "alpha",
-      text: response,
-      at: now()
-    }
+    {role:"human", text:q, at:now()},
+    {role:"alpha", text:response, at:now()}
   );
+  S.conversation = S.conversation.slice(-100);
 
-  S.conversation =
-    S.conversation.slice(-100);
+  /* Une réponse n'est pas considérée automatiquement comme une vérité.
+     On mémorise seulement son existence comme trace de dialogue. */
+  addMemory(`Dialogue — Question : ${q}\nRéponse produite : ${response}`,
+    "dialogue", .45, ["conversation"]);
 
   S.cycle++;
-
-  S.learning =
-    clamp(S.learning + 0.002);
+  S.learning = clamp(S.learning + .002);
+  S.selfModel.confidence = clamp(
+    .40 + Math.min(.50, S.statistics.successfulSearches / 100)
+  );
 
   save();
-
+  setStatus("● EN LIGNE");
   render();
 }
 
-/* ============================================================
-   APPRENTISSAGE DIRECT
-   ============================================================ */
+/* ---------- Apprentissage explicite ---------- */
 
-function learn(text, source = "human") {
-
-  if (!text || !text.trim()) return;
-
-  addMemory(
-    text.trim(),
-    source,
-    source === "internet" ? 0.70 : 0.80
-  );
-
-  S.learning =
-    clamp(S.learning + 0.01);
-
+function learn(text, source="human") {
+  const t = text.trim();
+  if (!t) return;
+  addMemory(t, source, source === "internet" ? .72 : .85, ["learned"]);
+  S.learning = clamp(S.learning + .01);
   S.cycle++;
-
-  if (source === "internet") {
-    S.statistics.learnedFromInternet++;
-  } else {
-    S.statistics.learnedFromHuman++;
-  }
-
+  if (source === "internet") S.statistics.learnedFromInternet++;
+  else S.statistics.learnedFromHuman++;
   save();
-
+  setStatus("● CONNAISSANCE MÉMORISÉE");
   render();
 }
 
-/* ============================================================
-   EVOLUTION
-   ============================================================ */
+/* ---------- Évolution ---------- */
 
 function score() {
-
-  return +(
-    S.learning * 0.30 +
-    S.adaptation * 0.30 +
-    S.integration * 0.20 +
-    S.exploration * 0.20
-  ).toFixed(4);
+  return +(S.learning*.30 + S.adaptation*.30 +
+    S.integration*.20 + S.exploration*.20).toFixed(4);
 }
 
 function evolve() {
+  const before = {...S.strategies};
+  const keys = Object.keys(before);
+  const adjustable = keys.filter(k => k !== "memoryThreshold");
+  const key = adjustable[Math.floor(Math.random()*adjustable.length)];
+  const delta = [-.05,-.03,.03,.05][Math.floor(Math.random()*4)];
 
-  const before = {
-    ...S.strategies
-  };
+  const beforeScore = score();
+  const after = {...before, [key]:clamp(before[key]+delta,.05,1)};
+  S.strategies = after;
+  S.adaptation = clamp(S.adaptation + Math.abs(delta)*.25);
+  const afterScore = score();
 
-  const keys =
-    Object.keys(before);
+  S.evolution.push({
+    at:now(),
+    reason:`Ajustement de ${key} (${delta>0?"+":""}${delta.toFixed(2)})`,
+    before, after, scoreBefore:beforeScore, scoreAfter:afterScore
+  });
 
-  const key =
-    keys[Math.floor(Math.random() * keys.length)];
-
-  const variations = [
-    -0.05,
-    -0.03,
-    0.03,
-    0.05
-  ];
-
-  const delta =
-    variations[
-      Math.floor(
-        Math.random() * variations.length
-      )
-    ];
-
-  const scoreBefore =
-    score();
-
-  const after = {
-    ...before,
-    [key]:
-      clamp(
-        before[key] + delta,
-        0.05,
-        1
-      )
-  };
-
-  S.strategies =
-    after;
-
-  S.adaptation =
-    clamp(
-      S.adaptation +
-      Math.abs(delta) * 0.25
-    );
-
-  const scoreAfter =
-    score();
-
-  const evolution = {
-    at: now(),
-    reason:
-      `Ajustement de ${key} ` +
-      `(${delta > 0 ? "+" : ""}${delta.toFixed(2)})`,
-    before,
-    after,
-    scoreBefore,
-    scoreAfter
-  };
-
-  S.evolution.push(
-    evolution
-  );
+  if (S.evolution.length > 500) S.evolution = S.evolution.slice(-500);
 
   S.cycle++;
-
+  S.learning = clamp(S.learning + .003);
   save();
 
+  $("evolutionResult").textContent =
+    `Paramètre : ${key}\nVariation : ${delta>0?"+":""}${delta.toFixed(2)}\n` +
+    `Score avant : ${beforeScore}\nScore après : ${afterScore}`;
+
+  setStatus("● ÉVOLUTION ENREGISTRÉE");
   render();
-
-  return evolution;
 }
 
-/* ============================================================
-   RECHERCHE MANUELLE D'UNE URL
-   ============================================================ */
+/* ---------- Interface ---------- */
 
-async function researchURL(url) {
-
-  try {
-
-    const parsed =
-      new URL(url);
-
-    if (
-      !/^https?:$/.test(
-        parsed.protocol
-      )
-    ) {
-      throw new Error(
-        "URL HTTP/HTTPS uniquement"
-      );
-    }
-
-    updateResearchStatus(
-      "Lecture de la source…"
-    );
-
-    const response =
-      await fetch(parsed.href);
-
-    if (!response.ok) {
-      throw new Error(
-        "HTTP " + response.status
-      );
-    }
-
-    const html =
-      await response.text();
-
-    const text =
-      html
-        .replace(
-          /<script[\s\S]*?<\/script>/gi,
-          " "
-        )
-        .replace(
-          /<style[\s\S]*?<\/style>/gi,
-          " "
-        )
-        .replace(
-          /<[^>]+>/g,
-          " "
-        )
-        .replace(
-          /\s+/g,
-          " "
-        )
-        .trim();
-
-    if (!text) {
-      throw new Error(
-        "Aucun texte exploitable"
-      );
-    }
-
-    learn(
-      `Source Internet : ${url}\n${text.slice(0, 10000)}`,
-      "internet"
-    );
-
-    updateResearchStatus(
-      "Source enregistrée dans la mémoire."
-    );
-
-    return text.slice(0, 3000);
-
-  } catch (error) {
-
-    const message =
-      "Lecture impossible : " +
-      error.message +
-      ". Certains sites bloquent les requêtes depuis un navigateur.";
-
-    updateResearchStatus(
-      message
-    );
-
-    return message;
-  }
+function setStatus(text) {
+  if ($("status")) $("status").textContent = text;
 }
 
-/* ============================================================
-   INTERFACE
-   ============================================================ */
+function escapeHTML(v) {
+  return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;")
+    .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
 
-function updateResearchStatus(text) {
-
-  if (
-    typeof researchResult !== "undefined" &&
-    researchResult
-  ) {
-    researchResult.textContent =
-      text;
-  }
+function renderChat() {
+  $("chat").innerHTML = S.conversation.slice(-30).map(m =>
+    `<div class="msg ${m.role==="alpha"?"alpha":""}"><b>${m.role==="alpha"?"ALPHA":"TOI"}</b><br>${escapeHTML(m.text)}</div>`
+  ).join("");
 }
 
 function render() {
+  $("cycle").textContent = S.cycle;
+  $("memoryCount").textContent = S.memories.length;
+  $("knowledgeCount").textContent =
+    S.memories.filter(m => m.source === "internet" || m.source === "human").length;
+  $("evolutionCount").textContent = S.evolution.length;
 
-  if (typeof cycle !== "undefined" && cycle) {
-    cycle.textContent =
-      S.cycle;
-  }
+  $("stateLine").textContent =
+    `EN LIGNE · apprentissage ${Math.round(S.learning*100)}%`;
+  $("focus").textContent = S.selfModel.currentFocus;
 
-  if (
-    typeof memoryCount !== "undefined" &&
-    memoryCount
-  ) {
-    memoryCount.textContent =
-      S.memories.length;
-  }
+  renderChat();
 
-  if (
-    typeof knowledgeCount !== "undefined" &&
-    knowledgeCount
-  ) {
-    knowledgeCount.textContent =
-      S.memories.filter(
-        m =>
-          m.source === "internet" ||
-          m.source === "human"
-      ).length;
-  }
+  $("memory").innerHTML = S.memories.slice(-20).reverse().map(m =>
+    `<div class="memoryItem">${escapeHTML(m.content.slice(0,800))}
+     <small>${escapeHTML(m.source)} · ${new Date(m.at).toLocaleString("fr-FR")}</small></div>`
+  ).join("");
 
-  if (
-    typeof evolutionCount !== "undefined" &&
-    evolutionCount
-  ) {
-    evolutionCount.textContent =
-      S.evolution.length;
-  }
+  $("journal").innerHTML = S.evolution.slice(-15).reverse().map(e =>
+    `<div class="memoryItem">${escapeHTML(e.reason)}
+     <small>${new Date(e.at).toLocaleString("fr-FR")} · ${e.scoreBefore} → ${e.scoreAfter}</small></div>`
+  ).join("");
 
-  if (
-    typeof stateLine !== "undefined" &&
-    stateLine
-  ) {
-
-    stateLine.textContent =
-      `Actif · apprentissage ` +
-      `${Math.round(S.learning * 100)}% · ` +
-      `adaptation ` +
-      `${Math.round(S.adaptation * 100)}%`;
-  }
-
-  if (
-    typeof focus !== "undefined" &&
-    focus
-  ) {
-    focus.textContent =
-      S.selfModel.currentFocus;
-  }
-
-  if (
-    typeof selfModel !== "undefined" &&
-    selfModel
-  ) {
-
-    selfModel.textContent =
-      JSON.stringify(
-        {
-          ...S.selfModel,
-          strategies:
-            S.strategies,
-          statistics:
-            S.statistics
-        },
-        null,
-        2
-      );
-  }
-
-  if (
-    typeof memory !== "undefined" &&
-    memory
-  ) {
-
-    memory.innerHTML =
-      S.memories
-        .slice(-40)
-        .reverse()
-        .map(m => `
-          <div class="memoryItem">
-            <b>[${escapeHTML(m.source)}]</b>
-            ${escapeHTML(m.content)}
-            <small>
-              ${new Date(m.at).toLocaleString("fr-FR")}
-            </small>
-          </div>
-        `)
-        .join("");
-  }
-
-  if (
-    typeof journal !== "undefined" &&
-    journal
-  ) {
-
-    journal.innerHTML =
-      S.evolution
-        .slice(-20)
-        .reverse()
-        .map(e => `
-          <div class="memoryItem">
-            <b>
-              ${escapeHTML(e.reason)}
-            </b>
-            <small>
-              ${new Date(e.at).toLocaleString("fr-FR")}
-              · ${e.scoreBefore}
-              → ${e.scoreAfter}
-            </small>
-          </div>
-        `)
-        .join("");
-  }
-
-  if (
-    typeof chat !== "undefined" &&
-    chat
-  ) {
-
-    chat.innerHTML =
-      S.conversation
-        .slice(-40)
-        .map(message => `
-          <div class="msg ${
-            message.role === "alpha"
-              ? "alpha"
-              : ""
-          }">
-            <b>
-              ${
-                message.role === "alpha"
-                  ? "ALPHA"
-                  : "TOI"
-              }
-            </b>
-            <br>
-            ${escapeHTML(message.text)}
-          </div>
-        `)
-        .join("");
-  }
-
-  if (
-    typeof status !== "undefined" &&
-    status
-  ) {
-    status.textContent =
-      "● MÉMOIRE ACTIVE · RECHERCHE ACTIVE";
-  }
+  $("selfModel").textContent = JSON.stringify({
+    version: VERSION,
+    name: S.name,
+    cycle: S.cycle,
+    learning: S.learning,
+    memory: S.memories.length,
+    searches: S.statistics.searches,
+    successfulSearches: S.statistics.successfulSearches,
+    capabilities: S.selfModel.capabilities,
+    limitations: S.selfModel.limitations,
+    strategies: S.strategies
+  }, null, 2);
 }
 
-/* ============================================================
-   BOUTON ENVOYER
-   ============================================================ */
+$("send").addEventListener("click", () => {
+  const q = $("question").value;
+  $("question").value = "";
+  answer(q);
+});
 
-if (
-  typeof send !== "undefined" &&
-  send
-) {
+$("question").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    $("send").click();
+  }
+});
 
-  send.onclick =
-    async () => {
+$("learn").addEventListener("click", () => {
+  const t = $("learnText").value;
+  $("learnText").value = "";
+  learn(t);
+});
 
-      const q =
-        question.value.trim();
+$("research").addEventListener("click", () => {
+  const u = $("url").value.trim();
+  if (!u) return;
+  researchUrl(u);
+});
 
-      if (!q) return;
+$("evolve").addEventListener("click", evolve);
 
-      question.value = "";
+$("exportState").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(S,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "alpha-memory-v5.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
 
-      await answer(q);
+$("importState").addEventListener("change", async e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const imported = JSON.parse(await file.text());
+    S = {
+      ...freshState(), ...imported,
+      strategies:{...freshState().strategies,...(imported.strategies||{})},
+      selfModel:{...freshState().selfModel,...(imported.selfModel||{})},
+      statistics:{...freshState().statistics,...(imported.statistics||{})}
     };
-}
-
-/* ============================================================
-   ENTREE CLAVIER
-   ============================================================ */
-
-if (
-  typeof question !== "undefined" &&
-  question
-) {
-
-  question.onkeydown =
-    event => {
-
-      if (
-        event.key === "Enter" &&
-        !event.shiftKey
-      ) {
-
-        event.preventDefault();
-
-        if (
-          typeof send !== "undefined" &&
-          send
-        ) {
-          send.click();
-        }
-      }
-    };
-}
-
-/* ============================================================
-   APPRENTISSAGE MANUEL
-   ============================================================ */
-
-if (
-  typeof learnButton !== "undefined" &&
-  learnButton
-) {
-
-  learnButton.onclick =
-    () => {
-
-      const text =
-        learnText.value.trim();
-
-      if (!text) return;
-
-      learn(
-        text,
-        "human"
-      );
-
-      learnText.value = "";
-    };
-}
-
-/*
-   Compatibilité avec l'ancien HTML
-   qui utilise simplement "learn".
-*/
-
-if (
-  typeof learn !== "undefined" &&
-  typeof window.learnButton === "undefined"
-) {
-  // Rien à faire.
-}
-
-/* ============================================================
-   EVOLUTION
-   ============================================================ */
-
-if (
-  typeof evolveButton !== "undefined" &&
-  evolveButton
-) {
-
-  evolveButton.onclick =
-    () => {
-
-      const result =
-        evolve();
-
-      if (
-        typeof evolutionResult !== "undefined" &&
-        evolutionResult
-      ) {
-
-        evolutionResult.textContent =
-          JSON.stringify(
-            result,
-            null,
-            2
-          );
-      }
-    };
-}
-
-/*
-   Compatibilité avec l'ancien bouton
-   nommé "evolve".
-*/
-
-if (
-  typeof evolve !== "undefined" &&
-  evolve instanceof HTMLElement
-) {
-
-  evolve.onclick =
-    () => {
-
-      const result =
-        window.alphaEvolve
-          ? window.alphaEvolve()
-          : null;
-
-      if (
-        typeof evolutionResult !== "undefined" &&
-        evolutionResult &&
-        result
-      ) {
-
-        evolutionResult.textContent =
-          JSON.stringify(
-            result,
-            null,
-            2
-          );
-      }
-    };
-}
-
-/* ============================================================
-   RECHERCHE URL
-   ============================================================ */
-
-if (
-  typeof researchButton !== "undefined" &&
-  researchButton
-) {
-
-  researchButton.onclick =
-    async () => {
-
-      const urlValue =
-        url.value.trim();
-
-      if (!urlValue) return;
-
-      const result =
-        await researchURL(
-          urlValue
-        );
-
-      if (
-        typeof researchResult !== "undefined" &&
-        researchResult
-      ) {
-        researchResult.textContent =
-          result;
-      }
-    };
-}
-
-/*
-   Compatibilité avec ancien HTML
-*/
-
-if (
-  typeof research !== "undefined" &&
-  research instanceof HTMLElement
-) {
-
-  research.onclick =
-    async () => {
-
-      const urlValue =
-        url.value.trim();
-
-      if (!urlValue) return;
-
-      const result =
-        await researchURL(
-          urlValue
-        );
-
-      if (
-        typeof researchResult !== "undefined" &&
-        researchResult
-      ) {
-        researchResult.textContent =
-          result;
-      }
-    };
-}
-
-/* ============================================================
-   EXPORT MEMOIRE
-   ============================================================ */
-
-if (
-  typeof exportState !== "undefined" &&
-  exportState
-) {
-
-  exportState.onclick =
-    () => {
-
-      const blob =
-        new Blob(
-          [
-            JSON.stringify(
-              S,
-              null,
-              2
-            )
-          ],
-          {
-            type:
-              "application/json"
-          }
-        );
-
-      const link =
-        document.createElement("a");
-
-      link.href =
-        URL.createObjectURL(blob);
-
-      link.download =
-        "alpha-memory.json";
-
-      link.click();
-
-      URL.revokeObjectURL(
-        link.href
-      );
-    };
-}
-
-/* ============================================================
-   IMPORT MEMOIRE
-   ============================================================ */
-
-if (
-  typeof importState !== "undefined" &&
-  importState
-) {
-
-  importState.onchange =
-    event => {
-
-      const file =
-        event.target.files[0];
-
-      if (!file) return;
-
-      const reader =
-        new FileReader();
-
-      reader.onload =
-        () => {
-
-          try {
-
-            const imported =
-              JSON.parse(
-                reader.result
-              );
-
-            S = {
-              ...freshState(),
-              ...imported
-            };
-
-            save();
-
-            render();
-
-          } catch {
-
-            alert(
-              "Mémoire Alpha invalide."
-            );
-          }
-        };
-
-      reader.readAsText(file);
-    };
-}
-
-/* ============================================================
-   INITIALISATION
-   ============================================================ */
-
+    save(); render();
+    setStatus("● MÉMOIRE IMPORTÉE");
+  } catch {
+    setStatus("● IMPORT IMPOSSIBLE");
+  }
+});
+
+setStatus("● EN LIGNE");
 render();
-
-/*
-   Expose quelques fonctions pour
-   permettre une évolution future.
-*/
-
-window.Alpha = {
-  state: () => S,
-
-  ask: question =>
-    answer(question),
-
-  learn: text =>
-    learn(text, "human"),
-
-  research: question =>
-    autonomousResearch(question),
-
-  evolve: () =>
-    evolve(),
-
-  save: () =>
-    save(),
-
-  exportMemory: () =>
-    JSON.stringify(
-      S,
-      null,
-      2
-    )
-};
-
-console.log(
-  "ALPHA V4 — mémoire active, apprentissage actif, recherche autonome."
-);

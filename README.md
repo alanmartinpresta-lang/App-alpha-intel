@@ -1,9 +1,20 @@
-# ALPHA V3 — Web autonome
+# ALPHA INTEL V5
 
-Tous les fichiers sont volontairement à la racine.
+Version prête pour GitHub Pages.
 
-Décompresser puis mettre tous les fichiers directement dans `main` et publier avec GitHub Pages.
+## Ce que cette version ajoute
 
-Capacités : mémoire persistante du navigateur, apprentissage, rappel de souvenirs, dialogue, auto-observation, expériences, évolution contrôlée des stratégies, journal, export/import de mémoire et exploration Internet lorsque le navigateur autorise CORS.
+- auto-observation avant les réponses d'identité/capacités/limites ;
+- mémoire persistante dans le navigateur ;
+- recherche Wikipédia automatique lorsque la mémoire est insuffisante ;
+- apprentissage explicite ;
+- évolution de stratégies ;
+- export/import de mémoire ;
+- évite de traiter automatiquement chaque réponse d'Alpha comme une vérité ;
+- conserve la compatibilité avec la clé de mémoire `alpha_v4_state`.
 
-Limite : la page ne continue pas à exécuter Alpha lorsqu'elle est fermée. Pour une activité 24/7, il faudra plus tard un backend persistant.
+## Installation
+
+Mettre `index.html`, `styles.css` et `app.js` à la racine du dépôt puis activer GitHub Pages sur `main` / `(root)`.
+
+Important : la mémoire est locale au navigateur. Elle ne se synchronise pas automatiquement avec GitHub.
