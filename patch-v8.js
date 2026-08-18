@@ -502,3 +502,128 @@
   );
 
 })();
+/* ============================================================
+   ALPHA V8 — INTERFACE PROPRE
+   Remplace le panneau flottant par un simple bouton.
+   ============================================================ */
+
+(() => {
+  "use strict";
+
+  function cleanDiagnosticPanel() {
+
+    // Supprime le panneau V8 qui recouvre l'écran
+    const oldPanel =
+      document.getElementById("alpha-v8-panel");
+
+    if (oldPanel) {
+      oldPanel.remove();
+    }
+
+    // Évite de créer plusieurs boutons
+    if (document.getElementById("alpha-v8-button")) {
+      return;
+    }
+
+    // Petit bouton discret
+    const button =
+      document.createElement("button");
+
+    button.id = "alpha-v8-button";
+    button.textContent = "V8";
+
+    button.style.cssText = `
+      position:fixed;
+      right:14px;
+      bottom:14px;
+      z-index:9999;
+
+      width:46px;
+      height:38px;
+
+      border:1px solid #444;
+      border-radius:12px;
+
+      background:#111;
+      color:#fff;
+
+      font-family:Arial,sans-serif;
+      font-size:12px;
+      font-weight:bold;
+
+      opacity:.75;
+      cursor:pointer;
+
+      box-shadow:0 4px 16px rgba(0,0,0,.35);
+    `;
+
+    button.title =
+      "Diagnostic Alpha V8";
+
+    button.addEventListener(
+      "click",
+      () => {
+
+        const report =
+          window.ALPHA_V8 &&
+          window.ALPHA_V8.selfReport
+            ? window.ALPHA_V8.selfReport()
+            : null;
+
+        if (!report) {
+          alert("Diagnostic V8 indisponible.");
+          return;
+        }
+
+        const evolutionCount =
+          Array.isArray(report.evolutionHistory)
+            ? report.evolutionHistory.length
+            : 0;
+
+        alert(
+          "ALPHA V8\n\n" +
+          "Cycles : " +
+          report.actualState.cycles + "\n" +
+
+          "Souvenirs : " +
+          report.actualState.memories + "\n" +
+
+          "Recherches : " +
+          report.actualState.searches + "\n" +
+
+          "Évolutions : " +
+          evolutionCount
+        );
+      }
+    );
+
+    document.body.appendChild(button);
+  }
+
+  function bootCleanInterface() {
+
+    cleanDiagnosticPanel();
+
+    // Vérifie encore après l'initialisation d'Alpha
+    setTimeout(
+      cleanDiagnosticPanel,
+      300
+    );
+  }
+
+  if (
+    document.readyState === "loading"
+  ) {
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      bootCleanInterface
+    );
+
+  } else {
+
+    bootCleanInterface();
+
+  }
+
+})();
