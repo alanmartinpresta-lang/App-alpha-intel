@@ -4,17 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#050505">
-<title>ALPHA V5</title>
+<title>ALPHA V7</title>
 <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
+
 <header>
-  <div><div class="brand">ALPHA<span>·</span>V5</div><small>AUTONOMOUS INTELLIGENCE</small></div>
+  <div>
+    <div class="brand">ALPHA<span>·</span>V7</div>
+    <small>AUTONOMOUS INTELLIGENCE</small>
+  </div>
+
   <div id="status">● INITIALISATION</div>
 </header>
+
 <main>
+
 <section class="hero">
   <div class="orb"><i></i></div>
+
   <div>
     <small>ÉTAT ACTUEL</small>
     <div id="stateLine">Chargement…</div>
@@ -23,58 +32,160 @@
 </section>
 
 <section class="stats">
-  <div><b id="cycle">0</b><span>CYCLES</span></div>
-  <div><b id="memoryCount">0</b><span>MÉMOIRES</span></div>
-  <div><b id="knowledgeCount">0</b><span>CONNAISSANCES</span></div>
-  <div><b id="evolutionCount">0</b><span>ÉVOLUTIONS</span></div>
+
+  <div>
+    <b id="cycle">0</b>
+    <span>CYCLES</span>
+  </div>
+
+  <div>
+    <b id="memoryCount">0</b>
+    <span>MÉMOIRES</span>
+  </div>
+
+  <div>
+    <b id="knowledgeCount">0</b>
+    <span>CONNAISSANCES</span>
+  </div>
+
+  <div>
+    <b id="evolutionCount">0</b>
+    <span>ÉVOLUTIONS</span>
+  </div>
+
 </section>
 
 <section class="panel">
+
 <h2>COMMUNICATION</h2>
+
 <div id="chat"></div>
+
 <div class="row">
-<textarea id="question" placeholder="Parle à Alpha…"></textarea>
-<button id="send">ÉCHANGER</button>
+
+<textarea
+id="question"
+placeholder="Parle à Alpha…"></textarea>
+
+<button id="send">
+ÉCHANGER
+</button>
+
 </div>
+
 </section>
 
 <section class="two">
+
 <div class="panel">
+
 <h2>APPRENDRE</h2>
-<textarea id="learnText" placeholder="Une information, une idée, une observation…"></textarea>
-<button id="learn">APPRENDRE</button>
+
+<textarea
+id="learnText"
+placeholder="Une information, une idée, une observation…"></textarea>
+
+<button id="learn">
+APPRENDRE
+</button>
+
 </div>
+
 <div class="panel">
+
 <h2>EXPLORER INTERNET</h2>
-<input id="url" placeholder="https://example.com">
-<button id="research">EXPLORER</button>
+
+<input
+id="url"
+placeholder="https://example.com">
+
+<button id="research">
+EXPLORER
+</button>
+
 <pre id="researchResult"></pre>
+
 </div>
+
 </section>
 
 <section class="two">
-<div class="panel">
-<h2>ÉVOLUTION</h2>
-<p>Alpha peut évaluer ses interactions, ajuster ses stratégies et conserver l'historique de ses changements.</p>
-<button id="evolve">FAIRE ÉVOLUER ALPHA</button>
-<pre id="evolutionResult"></pre>
-</div>
-<div class="panel">
-<h2>AUTO-OBSERVATION</h2>
-<pre id="selfModel"></pre>
-</div>
-</section>
 
-<section class="panel"><h2>MÉMOIRE RÉCENTE</h2><div id="memory"></div></section>
-<section class="panel"><h2>JOURNAL D'ÉVOLUTION</h2><div id="journal"></div></section>
+<div class="panel">
+
+<h2>ÉVOLUTION</h2>
+
+<p>
+Alpha peut analyser son fonctionnement,
+évaluer ses stratégies, rechercher des informations,
+comparer des solutions et modifier certains paramètres
+de son état persistant.
+</p>
+
+<button id="evolve">
+FAIRE ÉVOLUER ALPHA
+</button>
+
+<pre id="evolutionResult"></pre>
+
+</div>
+
+<div class="panel">
+
+<h2>AUTO-OBSERVATION</h2>
+
+<pre id="selfModel"></pre>
+
+</div>
+
+</section>
 
 <section class="panel">
-<h2>SAUVEGARDE</h2>
-<p>La mémoire est enregistrée dans le navigateur. Elle peut être exportée puis réimportée.</p>
-<button id="exportState">EXPORTER LA MÉMOIRE</button>
-<label class="buttonLabel">IMPORTER UNE MÉMOIRE<input id="importState" type="file" accept=".json"></label>
+
+<h2>MÉMOIRE RÉCENTE</h2>
+
+<div id="memory"></div>
+
 </section>
+
+<section class="panel">
+
+<h2>JOURNAL D'ÉVOLUTION</h2>
+
+<div id="journal"></div>
+
+</section>
+
+<section class="panel">
+
+<h2>SAUVEGARDE</h2>
+
+<p>
+La mémoire est enregistrée dans le navigateur.
+Elle peut être exportée puis réimportée.
+</p>
+
+<button id="exportState">
+EXPORTER LA MÉMOIRE
+</button>
+
+<label class="buttonLabel">
+
+IMPORTER UNE MÉMOIRE
+
+<input
+id="importState"
+type="file"
+accept=".json">
+
+</label>
+
+</section>
+
 </main>
+
 <script src="app.js"></script>
+<script src="patch-v7.js"></script>
+
 </body>
 </html>
